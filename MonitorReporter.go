@@ -10,13 +10,13 @@ type MonitorConfig struct {
 }
 
 type MonitorReporter struct {
-	clients []net.Conn
+	clients []*net.Conn
 	config  *MonitorConfig
 }
 
 func NewMonitorReporter(c *MonitorConfig) MonitorReporter {
 	log.Printf("Initializing MonitorReporter: %s", c.SocketPath)
-	return MonitorReporter{config: c, clients: make([]net.Conn, 0, 10)}
+	return MonitorReporter{config: c, clients: make([]*net.Conn, 0, 10)}
 }
 
 func (m *MonitorReporter) Listen(ch chan Sample) {
@@ -27,9 +27,9 @@ func (m *MonitorReporter) Listen(ch chan Sample) {
 		log.Fatal("listen error:", err)
 	}
 
-	newConnections := make(chan net.Conn)
+	newConnections := make(chan *net.Conn)
 	//dont know why im doing this...
-	go (func(ch chan net.Conn) {
+	go (func(ch chan *net.Conn) {
 		for {
 
 			fd, err := l.Accept()
@@ -39,7 +39,7 @@ func (m *MonitorReporter) Listen(ch chan Sample) {
 
 			log.Printf("Someone connected to our monitor socket")
 
-			ch <- fd
+			ch <- &fd
 		}
 	})(newConnections)
 
@@ -50,7 +50,7 @@ func (m *MonitorReporter) Listen(ch chan Sample) {
 			m.clients = append(m.clients, conn)
 		case <-ch:
 			for _, conn := range m.clients {
-				conn.Write([]byte("der er en sample"))
+				(*conn).Write([]byte("der er en sample"))
 			}
 		}
 	}
