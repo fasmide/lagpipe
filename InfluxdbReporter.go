@@ -51,6 +51,7 @@ func (i *InfluxdbReporter) Listen(sampleChan chan Sample) {
 
 	for {
 		sample := <-sampleChan
+		fmt.Printf("Ny sample: %+v\n\n", sample)
 		go i.report(sample)
 	}
 }

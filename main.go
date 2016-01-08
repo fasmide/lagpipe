@@ -3,27 +3,42 @@ package main
 import (
 	"fmt"
 	"os"
-	"sync"
 
 	"github.com/BurntSushi/toml"
 )
 
 const configPath = "/etc/lagpipe.conf"
 
-type config struct {
+type Config struct {
 	Samplers []*Sampler            `toml:"sampler"`
 	Influxdb InfluxdbConfiguration `toml:"influxdb"`
 	Monitor  MonitorConfig         `toml:"monitor"`
 }
 
+var config Config
+
 func main() {
-	var config config
 
 	// Read the configuration file
 	if _, err := toml.DecodeFile(configPath, &config); err != nil {
 		printConfig(err)
 	}
 
+	if _, err := os.Stat(config.Monitor.SocketPath); os.IsNotExist(err) {
+		//we are daemon
+		daemon()
+	} else {
+		//we are monitor
+		monitor()
+	}
+}
+
+func monitor() {
+	monitor := NewMonitor(&config.Monitor)
+	monitor.Start()
+}
+
+func daemon() {
 	fmt.Printf("Initializing %d samplers...\n", len(config.Samplers))
 
 	sampleChan := make(chan Sample)
@@ -35,21 +50,26 @@ func main() {
 		go sampler.Collect(sampleChan)
 
 	}
-	fmt.Printf("All Initialized\n")
 
-	var wg sync.WaitGroup
+	fmt.Printf("All Initialized\n")
 
 	influxdbReporter := New(&config.Influxdb)
 
-	wg.Add(1)
+	influxChan := make(chan Sample)
+
 	go influxdbReporter.Listen(sampleChan)
 
 	monitorReporter := NewMonitorReporter(&config.Monitor)
 
-	wg.Add(1)
+	monitorChan := make(chan Sample)
+
 	go monitorReporter.Listen(sampleChan)
 
-	wg.Wait()
+	for sample := range sampleChan {
+		influxChan <- sample
+		monitorChan <- sample
+	}
+
 }
 
 func printConfig(err error) {

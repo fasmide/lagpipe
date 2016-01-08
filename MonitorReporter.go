@@ -43,6 +43,7 @@ func (m *MonitorReporter) Listen(ch chan Sample) {
 		}
 	})(newConnections)
 
+	//Brander - hvordan detecter man disconnects - for at hive dem ud af m.clients array'et ?
 	for {
 		select {
 
