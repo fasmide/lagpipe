@@ -18,6 +18,7 @@ type Sampler struct {
 	Min              int64  `toml:"min"`
 	Max              int64  `toml:"max"`
 	Sigint           int    `toml:"sigint"`
+	Name             string `toml:"name"`
 	histogram        *hdrhistogram.Histogram
 	bucketQuantiles  []float64
 	outOfRangeErrors int64
@@ -28,6 +29,8 @@ type Sample struct {
 	Max, Min, TotalCount int64
 	StdDev, Mean         float64
 	OutOfRangeCount      int64
+	Time                 time.Time
+	Name                 string
 }
 
 type NginxSample struct {
@@ -131,7 +134,10 @@ func (s *Sampler) makeSample() Sample {
 		Min:        s.histogram.Min(),
 		Mean:       s.histogram.Mean(),
 		TotalCount: s.histogram.TotalCount(),
-		StdDev:     s.histogram.StdDev()}
+		StdDev:     s.histogram.StdDev(),
+		Time:       time.Now(),
+		Name:       s.Name,
+	}
 
 }
 

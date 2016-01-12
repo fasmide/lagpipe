@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"time"
 
 	"github.com/influxdata/influxdb/client/v2"
 )
@@ -23,7 +22,7 @@ type InfluxdbReporter struct {
 	hostname string
 }
 
-func New(c *InfluxdbConfiguration) InfluxdbReporter {
+func NewInfluxdbReporter(c *InfluxdbConfiguration) InfluxdbReporter {
 
 	lort := client.HTTPConfig{
 		Addr:     c.Url,
@@ -83,7 +82,7 @@ func (i *InfluxdbReporter) report(sample Sample) {
 	*/
 
 	// Create a point and add to batch
-	tags := map[string]string{"host": i.hostname}
+	tags := map[string]string{"host": i.hostname, "lagpipe_name": sample.Name}
 	fields := map[string]interface{}{
 		"max":             sample.Max,
 		"min":             sample.Min,
@@ -97,7 +96,7 @@ func (i *InfluxdbReporter) report(sample Sample) {
 		fields[fmt.Sprintf("p%f", quantile.Quantile)] = quantile.ValueAt
 	}
 
-	pt, _ := client.NewPoint("lagpipe", tags, fields, time.Now())
+	pt, _ := client.NewPoint("lagpipe", tags, fields, sample.Time)
 	bp.AddPoint(pt)
 
 	// Write the batch
