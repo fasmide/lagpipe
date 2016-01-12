@@ -1,0 +1,10 @@
+Package: lagpipe
+Version: PACKAGEVERSION
+Homepage: https://github.com/fasmide/lagpipe
+Section: non-free
+Priority: optional
+Architecture: amd64
+Depends: libc6
+Maintainer: Kristian Mide <fas@mide.dk>
+Description: lagpipe
+ nginx monitoring called lagpipe
