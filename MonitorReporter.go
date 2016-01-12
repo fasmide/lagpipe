@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"log"
 	"net"
+	"sync"
 )
 
 type MonitorConfig struct {
@@ -10,16 +12,15 @@ type MonitorConfig struct {
 }
 
 type MonitorReporter struct {
-	clients []*net.Conn
-	config  *MonitorConfig
+	clients    []net.Conn
+	config     *MonitorConfig
+	lock       sync.Mutex
+	lastSample *Sample
 }
 
-func NewMonitorReporter(c *MonitorConfig) MonitorReporter {
+func NewMonitorReporter(c *MonitorConfig) *MonitorReporter {
 	log.Printf("Initializing MonitorReporter: %s", c.SocketPath)
-	return MonitorReporter{config: c, clients: make([]*net.Conn, 0, 10)}
-}
-
-func (m *MonitorReporter) Listen(ch chan Sample) {
+	m := MonitorReporter{config: c, clients: make([]net.Conn, 0, 10)}
 
 	l, err := net.Listen("unix", m.config.SocketPath)
 
@@ -27,32 +28,59 @@ func (m *MonitorReporter) Listen(ch chan Sample) {
 		log.Fatal("listen error:", err)
 	}
 
-	newConnections := make(chan *net.Conn)
-	//dont know why im doing this...
-	go (func(ch chan *net.Conn) {
+	go func() {
 		for {
-
 			fd, err := l.Accept()
+
 			if err != nil {
 				log.Fatal("accept error:", err)
 			}
 
 			log.Printf("Someone connected to our monitor socket")
 
-			ch <- &fd
+			m.lock.Lock()
+			m.clients = append(m.clients, fd)
+			m.lock.Unlock()
+
+			m.send(m.lastSample, fd)
 		}
-	})(newConnections)
+	}()
 
-	//Brander - hvordan detecter man disconnects - for at hive dem ud af m.clients array'et ?
-	for {
-		select {
+	return &m
+}
 
-		case conn := <-newConnections:
-			m.clients = append(m.clients, conn)
-		case <-ch:
-			for _, conn := range m.clients {
-				(*conn).Write([]byte("der er en sample"))
-			}
+func (m *MonitorReporter) send(sample *Sample, fd net.Conn) {
+
+	payload, _ := json.Marshal(sample)
+
+	_, err := fd.Write(payload)
+
+	if err != nil {
+		m.remove(fd)
+	}
+
+}
+
+func (m *MonitorReporter) remove(fd net.Conn) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
+	for i, conn := range m.clients {
+		if conn == fd {
+			m.clients = append(m.clients[:i], m.clients[i+1:]...)
+			break
 		}
 	}
+}
+
+func (m *MonitorReporter) report(sample Sample) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
+	m.lastSample = &sample
+
+	for _, conn := range m.clients {
+		go m.send(&sample, conn)
+	}
+
 }

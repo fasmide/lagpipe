@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"log"
+	"net"
 	"os"
 
 	"github.com/BurntSushi/toml"
@@ -24,50 +26,52 @@ func main() {
 		printConfig(err)
 	}
 
-	if _, err := os.Stat(config.Monitor.SocketPath); os.IsNotExist(err) {
+	//we should also try ot connect to the socket....
+
+	if conn, err := net.Dial("unix", config.Monitor.SocketPath); err == nil {
+		//we are monitor
+		monitor(&conn)
+
+	} else {
 		//we are daemon
 		daemon()
-	} else {
-		//we are monitor
-		monitor()
 	}
 }
 
-func monitor() {
+func monitor(m *net.Conn) {
 	monitor := NewMonitor(&config.Monitor)
-	monitor.Start()
+	monitor.Start(m)
 }
 
 func daemon() {
-	fmt.Printf("Initializing %d samplers...\n", len(config.Samplers))
+	log.Printf("Making sure %s does not exist by removing it", config.Monitor.SocketPath)
+
+	err := os.Remove(config.Monitor.SocketPath)
+
+	if err != nil {
+		log.Fatal("Could not remove %s: %s", config.Monitor.SocketPath, err.Error())
+	}
+
+	log.Printf("Initializing %d samplers...\n", len(config.Samplers))
 
 	sampleChan := make(chan Sample)
 
 	// Start a worker for each pipe
 	for _, sampler := range config.Samplers {
-		fmt.Printf("Initializing sampler, path: %s\n", sampler.Path)
+		log.Printf("Starting sampler %s, path: %s\n", sampler.Name, sampler.Path)
 		sampler.Init()
 		go sampler.Collect(sampleChan)
 
 	}
 
-	fmt.Printf("All Initialized\n")
+	log.Printf("All Initialized\n")
 
-	influxdbReporter := New(&config.Influxdb)
-
-	influxChan := make(chan Sample)
-
-	go influxdbReporter.Listen(sampleChan)
-
+	influxdbReporter := NewInfluxdbReporter(&config.Influxdb)
 	monitorReporter := NewMonitorReporter(&config.Monitor)
 
-	monitorChan := make(chan Sample)
-
-	go monitorReporter.Listen(sampleChan)
-
 	for sample := range sampleChan {
-		influxChan <- sample
-		monitorChan <- sample
+		go influxdbReporter.report(sample)
+		go monitorReporter.report(sample)
 	}
 
 }
@@ -78,6 +82,7 @@ func printConfig(err error) {
 	}
 	conf := `[[sampler]]
 path = "/tmp/timing_log"
+name = "some_name"
 min = 1
 max = 60000
 sigint = 5

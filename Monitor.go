@@ -1,7 +1,7 @@
 package main
 
 import (
-	//"net"
+	"net"
 
 	ui "github.com/gizak/termui"
 )
@@ -14,7 +14,7 @@ func NewMonitor(c *MonitorConfig) Monitor {
 	return Monitor{config: c}
 }
 
-func (m *Monitor) Start() {
+func (m *Monitor) Start(conn *net.Conn) {
 	if err := ui.Init(); err != nil {
 		panic(err)
 	}

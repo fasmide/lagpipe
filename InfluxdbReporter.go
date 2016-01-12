@@ -46,15 +46,6 @@ func NewInfluxdbReporter(c *InfluxdbConfiguration) InfluxdbReporter {
 	return InfluxdbReporter{client: cli, config: c, hostname: hostname}
 }
 
-func (i *InfluxdbReporter) Listen(sampleChan chan Sample) {
-
-	for {
-		sample := <-sampleChan
-		fmt.Printf("Ny sample: %+v\n\n", sample)
-		go i.report(sample)
-	}
-}
-
 func (i *InfluxdbReporter) report(sample Sample) {
 	// Create a new point batch
 	bp, err := client.NewBatchPoints(client.BatchPointsConfig{
